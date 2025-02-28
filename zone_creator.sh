@@ -8,6 +8,30 @@ LOG_FILE="/var/log/dns_setup.log"
 echo "Script started at $(date)" >> "$LOG_FILE"
 exec >> "$LOG_FILE" 2>&1
 
+# Function to install BIND9 if not already installed
+install_bind9() {
+    if ! command -v named &> /dev/null; then
+        echo "BIND9 (named) is not installed. Installing BIND9..."
+        if command -v apt &> /dev/null; then
+            # Debian/Ubuntu
+            sudo apt update
+            sudo apt install -y bind9 bind9-utils
+        elif command -v yum &> /dev/null; then
+            # CentOS/RHEL
+            sudo yum install -y bind bind-utils
+        else
+            echo "Error: Unsupported package manager. Please install BIND9 manually."
+            exit 1
+        fi
+        echo "BIND9 installed successfully."
+    else
+        echo "BIND9 is already installed."
+    fi
+}
+
+# Install BIND9 if not installed
+install_bind9
+
 # Input validation functions
 validate_domain() {
     if [[ ! "$1" =~ ^([a-zA-Z0-9]+(-[a-zA-Z0-9]+)*\.)+[a-zA-Z]{2,}$ ]]; then

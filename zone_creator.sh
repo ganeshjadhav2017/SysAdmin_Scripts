@@ -5,8 +5,8 @@ set -e
 
 # Logging
 LOG_FILE="/var/log/dns_setup.log"
-exec > >(tee -a "$LOG_FILE") 2>&1
-echo "Script started at $(date)"
+echo "Script started at $(date)" >> "$LOG_FILE"
+exec >> "$LOG_FILE" 2>&1
 
 # Input validation functions
 validate_domain() {

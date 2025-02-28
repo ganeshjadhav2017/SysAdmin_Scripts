@@ -15,7 +15,7 @@ install_bind9() {
             sudo apt update
             sudo apt install -y bind9 bind9-utils
         elif command -v dnf &> /dev/null; then
-            # CentOS/RHEL
+            # CentOS/RHEL (using dnf as per your request)
             sudo dnf install -y bind bind-utils
         else
             echo "Error: Unsupported package manager. Please install BIND9 manually."
@@ -27,8 +27,13 @@ install_bind9() {
     fi
 }
 
-# Install BIND9 if not installed
-install_bind9
+# Check if named service exists and install if needed
+if ! systemctl is-active --quiet named; then
+    echo "named service is not active or installed."
+    install_bind9
+else
+    echo "named service is active."
+fi
 
 # Input validation functions
 validate_domain() {

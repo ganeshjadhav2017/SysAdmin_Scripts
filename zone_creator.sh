@@ -3,10 +3,8 @@
 # Exit on error
 set -e
 
-# Logging
-LOG_FILE="/var/log/dns_setup.log"
-echo "Script started at $(date)" >> "$LOG_FILE"
-exec >> "$LOG_FILE" 2>&1
+# Debugging: Print script start time
+echo "Script started at $(date)"
 
 # Function to install BIND9 if not already installed
 install_bind9() {
@@ -34,28 +32,21 @@ install_bind9
 
 # Input validation functions
 validate_domain() {
-    if [[ ! "<span class="math-inline">1" \=\~ ^\(\[a\-zA\-Z0\-9\]\+\(\-\[a\-zA\-Z0\-9\]\+\)\*\\\.\)\+\[a\-zA\-Z\]\{2,\}</span> ]]; then
+    if [[ ! "$1" =~ ^([a-zA-Z0-9]+(-[a-zA-Z0-9]+)*\.)+[a-zA-Z]{2,}$ ]]; then
         echo "Error: Invalid domain name."
         exit 1
     fi
 }
 
 validate_ip() {
-    if [[ ! "<span class="math-inline">1" \=\~ ^\(\[0\-9\]\{1,3\}\\\.\)\{3\}\[0\-9\]\{1,3\}</span> ]]; then
+    if [[ ! "$1" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
         echo "Error: Invalid IP address."
         exit 1
     fi
-    local octet
-    for octet in $(echo "$1" | tr "." " "); do
-        if [[ "$octet" -lt 0 || "$octet" -gt 255 ]]; then
-            echo "Error: Invalid IP address octet."
-            exit 1
-        fi
-    done
 }
 
 validate_email() {
-    if [[ ! "<span class="math-inline">1" \=\~ ^\[a\-zA\-Z0\-9\.\_%\+\-\]\+@\[a\-zA\-Z0\-9\.\-\]\+\\\.\[a\-zA\-Z\]\{2,\}</span> ]]; then
+    if [[ ! "$1" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
         echo "Error: Invalid email address."
         exit 1
     fi
@@ -81,48 +72,57 @@ read -p "Enter server IP: " SERVER_IP
 validate_ip "$SERVER_IP"
 
 read -p "Enter mail server IP: " MAIL_SERVER_IP
-validate_ip "<span class="math-inline">MAIL\_SERVER\_IP"
-\# Extract the main domain
-MAIN\_DOMAIN\=</span>(extract_main_domain "$DOMAIN")
+validate_ip "$MAIL_SERVER_IP"
+
+# Debugging: Print user inputs
+echo "DOMAIN: $DOMAIN"
+echo "NAMESERVER_IP: $NAMESERVER_IP"
+echo "ADMIN_EMAIL: $ADMIN_EMAIL"
+echo "SERVER_IP: $SERVER_IP"
+echo "MAIL_SERVER_IP: $MAIL_SERVER_IP"
+
+# Extract the main domain
+MAIN_DOMAIN=$(extract_main_domain "$DOMAIN")
+echo "Main domain: $MAIN_DOMAIN"
 
 # Create zones directory if it doesn't exist
 ZONES_DIR="/etc/bind/zones"
 if [ ! -d "$ZONES_DIR" ]; then
-    mkdir -p "$ZONES_DIR"
+    echo "Creating zones directory: $ZONES_DIR"
+    sudo mkdir -p "$ZONES_DIR"
 fi
 
 # Define the zone file for the main domain
 ZONE_FILE="$ZONES_DIR/$MAIN_DOMAIN.zone"
+echo "Zone file: $ZONE_FILE"
 
 # Check if the zone file for the main domain already exists
 if [ -f "$ZONE_FILE" ]; then
     echo "Zone file for main domain $MAIN_DOMAIN already exists. Adding subdomain records..."
 else
-    echo "Creating a new zone file for main domain <span class="math-inline">MAIN\_DOMAIN\.\.\."
-\# Create a new zone file for the main domain
-ADMIN\_EMAIL\_BIND\=</span>(echo "<span class="math-inline">ADMIN\_EMAIL" \| sed 's/@/\./'\)
-SERIAL\=</span>(date +%Y%m%d%H%M) #more accurate serial number
+    echo "Creating a new zone file for main domain $MAIN_DOMAIN..."
+    # Create a new zone file for the main domain
     cat << EOF > "$ZONE_FILE"
 \$TTL 86400
-@    IN    SOA $NAMESERVER_IP. $ADMIN_EMAIL_BIND. (
-                                $SERIAL ; Serial
-                                3600         ; Refresh
-                                1800         ; Retry
-                                604800       ; Expire
-                                86400        ; Minimum TTL
-                                )
+@   IN  SOA $NAMESERVER_IP. $ADMIN_EMAIL. (
+                $(date +%Y%m%d%H) ; Serial
+                3600       ; Refresh
+                1800       ; Retry
+                604800     ; Expire
+                86400      ; Minimum TTL
+                )
 
 ; Name servers
-@                IN    NS    $NAMESERVER_IP.
+@               IN  NS  $NAMESERVER_IP.
 
 ; A records
-@                IN    A     $SERVER_IP
+@               IN  A   $SERVER_IP
 
 ; MX records
-@                IN    MX    10    mail.$MAIN_DOMAIN.
+@               IN  MX  10  mail.$MAIN_DOMAIN.
 
 ; Mail server
-mail             IN    A     $MAIL_SERVER_IP
+mail            IN  A   $MAIL_SERVER_IP
 EOF
 fi
 
@@ -131,16 +131,17 @@ if [[ "$DOMAIN" != "$MAIN_DOMAIN" ]]; then
     echo "Adding subdomain records for $DOMAIN..."
     cat << EOF >> "$ZONE_FILE"
 ; Subdomain records
-$DOMAIN                IN    A     $SERVER_IP
+$DOMAIN         IN  A   $SERVER_IP
 EOF
 fi
 
 # Set correct permissions and ownership
-chown root:bind "$ZONE_FILE"
-chmod 640 "<span class="math-inline">ZONE\_FILE"
-\# Backup existing BIND9 configuration
-BACKUP\_FILE\="/etc/bind/named\.conf\.local\.</span>(date +%Y%m%d%H%M%S).bak"
-cp /etc/bind/named.conf.local "$BACKUP_FILE"
+sudo chown root:bind "$ZONE_FILE"
+sudo chmod 640 "$ZONE_FILE"
+
+# Backup existing BIND9 configuration
+BACKUP_FILE="/etc/bind/named.conf.local.$(date +%Y%m%d%H%M%S).bak"
+sudo cp /etc/bind/named.conf.local "$BACKUP_FILE"
 echo "Backup of named.conf.local created at $BACKUP_FILE."
 
 # Update BIND9 configuration to include the main domain zone (if not already present)
@@ -149,15 +150,17 @@ if ! grep -q "zone \"$MAIN_DOMAIN\"" /etc/bind/named.conf.local; then
     echo "zone \"$MAIN_DOMAIN\" {
         type master;
         file \"$ZONE_FILE\";
-    };" >> /etc/bind/named.conf.local
+    };" | sudo tee -a /etc/bind/named.conf.local
 fi
 
 # Validate the zone file
 if ! named-checkzone "$MAIN_DOMAIN" "$ZONE_FILE"; then
-    echo "Error: Zone
+    echo "Error: Zone file validation failed."
+    exit 1
+fi
 
 # Restart BIND9 to apply changes
-if systemctl restart bind9; then
+if sudo systemctl restart bind9; then
     echo "BIND9 restarted successfully."
 else
     echo "Error: Failed to restart BIND9."

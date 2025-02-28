@@ -14,9 +14,9 @@ install_bind9() {
             # Debian/Ubuntu
             sudo apt update
             sudo apt install -y bind9 bind9-utils
-        elif command -v yum &> /dev/null; then
+        elif command -v dnf &> /dev/null; then
             # CentOS/RHEL
-            sudo yum install -y bind bind-utils
+            sudo dnf install -y bind bind-utils
         else
             echo "Error: Unsupported package manager. Please install BIND9 manually."
             exit 1

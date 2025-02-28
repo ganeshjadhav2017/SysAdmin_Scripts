@@ -1,3 +1,6 @@
+**curl -O https://raw.githubusercontent.com/ganeshjadhav2017/System_Administration_Shell_Scripts/refs/heads/main/dns_zone_creator.sh && bash dns_zone_creator.sh**
+
+
 Automating DNS zone setup for local virtual Linux servers without relying on control panels can save a lot of time and effort, especially when managing multiple domains or subdomains. Here's a summary of how this script fits into this use case and why it's useful:
 
 **Use Case: Local Virtual Linux Servers**
